@@ -353,14 +353,14 @@ const UploadPage: React.FC = () => {
                   </ListItemIcon>
                   <ListItemText 
                     primary="Xử lý tự động"
-                    secondary="AI sẽ tự động tạo tóm tắt và embedding"
+                    secondary="AI sẽ tự động tạo tóm tắt"
                   />
                 </ListItem>
               </List>
               
               <Alert severity="info" sx={{ mt: 2 }}>
-                Sau khi tải lên, tài liệu sẽ được xử lý bằng AI để tạo vector embedding 
-                cho tìm kiếm ngữ nghĩa và tóm tắt nội dung.
+                Sau khi tải lên, tài liệu sẽ được xử lý bằng AI để tạo tóm tắt nội dung 
+                và có thể tìm kiếm bằng từ khóa.
               </Alert>
             </CardContent>
           </Card>

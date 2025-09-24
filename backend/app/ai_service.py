@@ -1,18 +1,9 @@
 from typing import List, Optional
-import numpy as np
 import asyncio
 import logging
 from app.config import settings
 
-# Lazy imports to avoid dependency issues
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"SentenceTransformers not available: {e}")
-    SentenceTransformer = None
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
-
+# Lazy imports for Gemini AI only
 try:
     from google import genai
     from google.genai import types
@@ -26,24 +17,15 @@ except ImportError as e:
 logger = logging.getLogger(__name__)
 
 class AIService:
-    """AI service for embedding generation and question answering"""
+    """AI service for question answering (embedding functionality removed)"""
     
     def __init__(self):
-        self.sentence_transformer = None
         self.gemini_client = None
         self._initialize_models()
     
     def _initialize_models(self):
         """Initialize AI models"""
         try:
-            # Initialize Sentence Transformer for embeddings
-            if SENTENCE_TRANSFORMERS_AVAILABLE and SentenceTransformer:
-                self.sentence_transformer = SentenceTransformer(settings.SENTENCE_TRANSFORMER_MODEL)
-                logger.info(f"Loaded Sentence Transformer model: {settings.SENTENCE_TRANSFORMER_MODEL}")
-            else:
-                logger.warning("SentenceTransformers not available. Embedding functionality disabled.")
-                self.sentence_transformer = None
-            
             # Initialize Gemini client if API key is provided
             if GEMINI_AVAILABLE and settings.GEMINI_API_KEY:
                 self.gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -58,47 +40,8 @@ class AIService:
         except Exception as e:
             logger.error(f"Failed to initialize AI models: {e}")
             # Don't raise exception, allow app to continue with limited functionality
-            self.sentence_transformer = None
             self.gemini_client = None
-    
-    def generate_embedding(self, text: str) -> List[float]:
-        """Generate vector embedding for text"""
-        try:
-            if not self.sentence_transformer:
-                raise ValueError("Sentence Transformer model not available. Please install compatible versions.")
-            
-            # Generate embedding
-            embedding = self.sentence_transformer.encode(text)
-            return embedding.tolist()
-            
-        except Exception as e:
-            logger.error(f"Failed to generate embedding: {e}")
-            # Return a dummy embedding as fallback
-            logger.warning("Returning dummy embedding. Install sentence-transformers for real embeddings.")
-            return [0.0] * 384  # Standard dimension for MiniLM model
-    
-    def calculate_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-        """Calculate cosine similarity between two embeddings"""
-        try:
-            # Convert to numpy arrays
-            vec1 = np.array(embedding1)
-            vec2 = np.array(embedding2)
-            
-            # Calculate cosine similarity
-            dot_product = np.dot(vec1, vec2)
-            norm1 = np.linalg.norm(vec1)
-            norm2 = np.linalg.norm(vec2)
-            
-            if norm1 == 0 or norm2 == 0:
-                return 0.0
-            
-            similarity = dot_product / (norm1 * norm2)
-            return float(similarity)
-            
-        except Exception as e:
-            logger.error(f"Failed to calculate similarity: {e}")
-            return 0.0
-    
+
     async def generate_answer(self, question: str, context_documents: List[str]) -> tuple[str, float]:
         """Generate answer using Gemini AI based on context documents"""
         try:

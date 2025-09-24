@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     
     # AI settings
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
-    SENTENCE_TRANSFORMER_MODEL: str = os.getenv("SENTENCE_TRANSFORMER_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     
     # Gemini settings
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")

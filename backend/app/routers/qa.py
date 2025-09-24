@@ -73,11 +73,8 @@ async def find_relevant_documents(
     limit: int,
     category: str = None
 ) -> List[dict]:
-    """Find documents most relevant to the question"""
+    """Find documents most relevant to the question using text search only"""
     try:
-        # Generate embedding for the question
-        question_embedding = ai_service.generate_embedding(question)
-        
         # Build base query
         query = {}
         if category:
@@ -85,45 +82,40 @@ async def find_relevant_documents(
         
         # Try text search first
         try:
-            text_pipeline = [
-                {"$match": {**query, "$text": {"$search": question}}},
-                {"$addFields": {"score": {"$meta": "textScore"}}},
-                {"$sort": {"score": {"$meta": "textScore"}}},
-                {"$limit": limit}
-            ]
+            query["$text"] = {"$search": question}
+            cursor = db.documents.find(query)
+            cursor.sort([("score", {"$meta": "textScore"})])
+            cursor.limit(limit)
             
-            cursor = db.documents.aggregate(text_pipeline)
             documents = await cursor.to_list(length=limit)
             
             if documents:
                 return documents
                 
         except Exception as e:
-            logger.warning(f"Text search failed, falling back to semantic search: {e}")
+            logger.warning(f"Text search failed: {e}")
         
-        # Fallback to semantic search
-        cursor = db.documents.find(query)
-        all_documents = await cursor.to_list(length=None)
+        # Fallback to simple content search
+        fallback_query = {}
+        if category:
+            fallback_query["category"] = category
+            
+        # Simple keyword matching in content
+        question_terms = question.lower().split()
+        regex_patterns = [{"content": {"$regex": term, "$options": "i"}} for term in question_terms]
+        if regex_patterns:
+            fallback_query["$or"] = regex_patterns
         
-        # Calculate semantic similarities
-        scored_documents = []
-        for doc in all_documents:
-            if doc.get("vector_embedding"):
-                similarity = ai_service.calculate_similarity(
-                    question_embedding, 
-                    doc["vector_embedding"]
-                )
-                scored_documents.append((doc, similarity))
+        cursor = db.documents.find(fallback_query)
+        cursor.sort("date_created", -1)
+        cursor.limit(limit)
         
-        # Sort by similarity and take top results
-        scored_documents.sort(key=lambda x: x[1], reverse=True)
-        relevant_docs = [doc for doc, score in scored_documents[:limit] if score > 0.3]
-        
-        return relevant_docs
-        
+        return await cursor.to_list(length=limit)
+                
     except Exception as e:
         logger.error(f"Failed to find relevant documents: {e}")
-        # Fallback to simple keyword search
+        # Return empty list if all methods fail
+        return []
         return await fallback_document_search(db, question, limit, category)
 
 async def fallback_document_search(

@@ -22,7 +22,6 @@ class DocumentModel(BaseModel):
     file_path: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
-    vector_embedding: Optional[List[float]] = None
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
     
     @classmethod

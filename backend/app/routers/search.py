@@ -6,7 +6,6 @@ import logging
 
 from app.database import get_database
 from app.models import SearchRequest, SearchResponse, SearchResult, DocumentModel
-from app.ai_service import ai_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -16,216 +15,54 @@ async def search_documents(
     search_request: SearchRequest,
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
-    """Search documents using text and semantic search"""
+    """Search documents using text search only (embedding functionality removed)"""
     start_time = time.time()
     
     try:
-        # Generate query embedding for semantic search
-        query_embedding = ai_service.generate_embedding(search_request.query)
+        # Build MongoDB query
+        query = {}
         
-        # Build MongoDB aggregation pipeline
-        pipeline = []
-        
-        # Match stage for filtering
-        match_stage = {}
+        # Add category filter
         if search_request.category:
-            match_stage["category"] = search_request.category
+            query["category"] = search_request.category
+        
+        # Add tags filter
         if search_request.tags:
-            match_stage["tags"] = {"$in": search_request.tags}
+            query["tags"] = {"$in": search_request.tags}
         
-        if match_stage:
-            pipeline.append({"$match": match_stage})
+        # Add text search if query provided
+        if search_request.query:
+            query["$text"] = {"$search": search_request.query}
         
-        # Add text search score if query contains text
-        text_search_stage = {
-            "$match": {
-                "$text": {"$search": search_request.query}
-            }
-        }
-        text_score_stage = {
-            "$addFields": {
-                "text_score": {"$meta": "textScore"}
-            }
-        }
+        # Execute search with sorting and pagination
+        cursor = db.documents.find(query)
         
-        # For now, use text search as primary method
-        pipeline.extend([text_search_stage, text_score_stage])
+        # Sort by text score if query provided, otherwise by date
+        if search_request.query:
+            cursor.sort([("score", {"$meta": "textScore"})])
+        else:
+            cursor.sort("date_created", -1)
         
-        # Sort by text score
-        pipeline.append({"$sort": {"text_score": {"$meta": "textScore"}}})
-        
-        # Pagination
-        pipeline.extend([
-            {"$skip": search_request.offset},
-            {"$limit": search_request.limit}
-        ])
-        
-        # Execute search
-        cursor = db.documents.aggregate(pipeline)
+        # Apply pagination
+        cursor.skip(search_request.offset).limit(search_request.limit)
         documents = await cursor.to_list(length=search_request.limit)
         
-        # Calculate semantic similarity scores and prepare results
+        # Prepare results
         results = []
         for doc in documents:
             document_model = DocumentModel(**doc)
             
-            # Calculate semantic similarity if embedding exists
-            semantic_score = 0.0
-            if doc.get("vector_embedding"):
-                semantic_score = ai_service.calculate_similarity(
-                    query_embedding, 
-                    doc["vector_embedding"]
-                )
+            # Get text score or use default
+            score = 1.0
+            if search_request.query:
+                score = doc.get("score", 1.0)
             
-            # Use text score if available, otherwise use semantic score
-            final_score = doc.get("text_score", semantic_score)
-            
-            # Generate highlights (simple implementation)
-            highlights = generate_highlights(search_request.query, doc.get("content", ""))
-            
-            result = SearchResult(
-                document=document_model,
-                score=final_score,
-                highlights=highlights
-            )
-            results.append(result)
-        
-        # Get total count for pagination
-        total_count = await get_search_count(db, search_request)
-        
-        execution_time = time.time() - start_time
-        
-        return SearchResponse(
-            results=results,
-            total_count=total_count,
-            query=search_request.query,
-            execution_time=execution_time
-        )
-        
-    except Exception as e:
-        logger.error(f"Search failed: {e}")
-        # Fallback to simple search if text search fails
-        return await fallback_search(db, search_request, start_time)
-
-@router.post("/semantic", response_model=SearchResponse)
-async def semantic_search(
-    search_request: SearchRequest,
-    db: AsyncIOMotorDatabase = Depends(get_database)
-):
-    """Pure semantic search using vector embeddings"""
-    start_time = time.time()
-    
-    try:
-        # Generate query embedding
-        query_embedding = ai_service.generate_embedding(search_request.query)
-        
-        # Build base query
-        query = {}
-        if search_request.category:
-            query["category"] = search_request.category
-        if search_request.tags:
-            query["tags"] = {"$in": search_request.tags}
-        
-        # Get all documents that match filters
-        cursor = db.documents.find(query)
-        all_documents = await cursor.to_list(length=None)
-        
-        # Calculate semantic similarities
-        scored_documents = []
-        for doc in all_documents:
-            if doc.get("vector_embedding"):
-                similarity = ai_service.calculate_similarity(
-                    query_embedding, 
-                    doc["vector_embedding"]
-                )
-                scored_documents.append((doc, similarity))
-        
-        # Sort by similarity score
-        scored_documents.sort(key=lambda x: x[1], reverse=True)
-        
-        # Apply pagination
-        start_idx = search_request.offset
-        end_idx = start_idx + search_request.limit
-        paginated_docs = scored_documents[start_idx:end_idx]
-        
-        # Prepare results
-        results = []
-        for doc, score in paginated_docs:
-            document_model = DocumentModel(**doc)
-            highlights = generate_highlights(search_request.query, doc.get("content", ""))
+            # Generate simple highlights
+            highlights = generate_highlights(search_request.query or "", doc.get("content", ""))
             
             result = SearchResult(
                 document=document_model,
                 score=score,
-                highlights=highlights
-            )
-            results.append(result)
-        
-        execution_time = time.time() - start_time
-        
-        return SearchResponse(
-            results=results,
-            total_count=len(scored_documents),
-            query=search_request.query,
-            execution_time=execution_time
-        )
-        
-    except Exception as e:
-        logger.error(f"Semantic search failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def get_search_count(db: AsyncIOMotorDatabase, search_request: SearchRequest) -> int:
-    """Get total count of search results"""
-    try:
-        match_stage = {"$text": {"$search": search_request.query}}
-        
-        if search_request.category:
-            match_stage["category"] = search_request.category
-        if search_request.tags:
-            match_stage["tags"] = {"$in": search_request.tags}
-        
-        count = await db.documents.count_documents(match_stage)
-        return count
-        
-    except Exception:
-        # Fallback count
-        return 0
-
-async def fallback_search(
-    db: AsyncIOMotorDatabase, 
-    search_request: SearchRequest, 
-    start_time: float
-) -> SearchResponse:
-    """Fallback search using regex when text search is not available"""
-    try:
-        # Build regex query
-        query = {
-            "$or": [
-                {"title": {"$regex": search_request.query, "$options": "i"}},
-                {"content": {"$regex": search_request.query, "$options": "i"}},
-                {"summary": {"$regex": search_request.query, "$options": "i"}}
-            ]
-        }
-        
-        # Add filters
-        if search_request.category:
-            query["category"] = search_request.category
-        if search_request.tags:
-            query["tags"] = {"$in": search_request.tags}
-        
-        # Execute query
-        cursor = db.documents.find(query).skip(search_request.offset).limit(search_request.limit)
-        documents = await cursor.to_list(length=search_request.limit)
-        
-        # Prepare results
-        results = []
-        for doc in documents:
-            document_model = DocumentModel(**doc)
-            highlights = generate_highlights(search_request.query, doc.get("content", ""))
-            
-            result = SearchResult(
-                document=document_model,
-                score=0.5,  # Default score for regex search
                 highlights=highlights
             )
             results.append(result)
@@ -238,40 +75,68 @@ async def fallback_search(
         return SearchResponse(
             results=results,
             total_count=total_count,
-            query=search_request.query,
+            query=search_request.query or "",
             execution_time=execution_time
         )
         
     except Exception as e:
-        logger.error(f"Fallback search failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 def generate_highlights(query: str, content: str, max_highlights: int = 3) -> List[str]:
-    """Generate text highlights for search results"""
+    """Generate simple text highlights"""
+    if not query or not content:
+        return []
+    
+    highlights = []
+    query_terms = query.lower().split()
+    content_lower = content.lower()
+    
+    # Find sentences containing query terms
+    sentences = content.split('.')
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if len(sentence) < 20:  # Skip very short sentences
+            continue
+            
+        sentence_lower = sentence.lower()
+        
+        # Check if sentence contains any query terms
+        for term in query_terms:
+            if term in sentence_lower:
+                # Add some context around the sentence
+                highlight = sentence[:200] + ("..." if len(sentence) > 200 else "")
+                if highlight not in highlights:
+                    highlights.append(highlight)
+                break
+        
+        if len(highlights) >= max_highlights:
+            break
+    
+    return highlights
+
+@router.get("/categories")
+async def get_search_categories(
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """Get all available categories for search filters"""
     try:
-        highlights = []
-        query_words = query.lower().split()
-        content_lower = content.lower()
-        
-        # Find sentences containing query words
-        sentences = content.split('.')
-        for sentence in sentences[:20]:  # Check first 20 sentences
-            sentence = sentence.strip()
-            if len(sentence) > 20:  # Filter short sentences
-                sentence_lower = sentence.lower()
-                word_count = sum(1 for word in query_words if word in sentence_lower)
-                
-                if word_count > 0:
-                    # Truncate if too long
-                    if len(sentence) > 200:
-                        sentence = sentence[:200] + "..."
-                    highlights.append(sentence)
-                    
-                    if len(highlights) >= max_highlights:
-                        break
-        
-        return highlights
+        categories = await db.documents.distinct("category")
+        return {"categories": categories}
         
     except Exception as e:
-        logger.error(f"Failed to generate highlights: {e}")
-        return []
+        logger.error(f"Failed to get categories: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get categories")
+
+@router.get("/tags")
+async def get_search_tags(
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """Get all available tags for search filters"""
+    try:
+        tags = await db.documents.distinct("tags")
+        return {"tags": tags}
+        
+    except Exception as e:
+        logger.error(f"Failed to get tags: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get tags")
