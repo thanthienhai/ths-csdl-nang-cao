@@ -9,9 +9,22 @@ class Settings(BaseSettings):
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     DATABASE_NAME: str = os.getenv("DATABASE_NAME", "legal_documents")
     
+    # MongoDB Atlas settings
+    MONGODB_USERNAME: Optional[str] = os.getenv("MONGODB_USERNAME")
+    MONGODB_PASSWORD: Optional[str] = os.getenv("MONGODB_PASSWORD")
+    MONGODB_CLUSTER: Optional[str] = os.getenv("MONGODB_CLUSTER")
+    MONGODB_OPTIONS: str = os.getenv("MONGODB_OPTIONS", "retryWrites=true&w=majority")
+    
+    # Connection preferences
+    USE_ATLAS: bool = os.getenv("USE_ATLAS", "true").lower() == "true"
+    SSL_CERT_VALIDATION: bool = os.getenv("SSL_CERT_VALIDATION", "false").lower() == "true"
+    
     # AI settings
-    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
     SENTENCE_TRANSFORMER_MODEL: str = os.getenv("SENTENCE_TRANSFORMER_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    
+    # Gemini settings
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     
     # Security settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
