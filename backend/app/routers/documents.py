@@ -20,9 +20,6 @@ async def create_document(
 ):
     """Create a new document"""
     try:
-        # Generate vector embedding for the content
-        embedding = ai_service.generate_embedding(document.content)
-        
         # Generate summary if not provided
         summary = document.summary
         if not summary:
@@ -36,7 +33,6 @@ async def create_document(
             "category": document.category,
             "tags": document.tags,
             "date_created": datetime.utcnow(),
-            "vector_embedding": embedding,
             "metadata": document.metadata
         }
         
@@ -72,9 +68,6 @@ async def upload_document(
         # Generate summary
         summary = document_processor.generate_summary(extracted_text)
         
-        # Generate vector embedding
-        embedding = ai_service.generate_embedding(extracted_text)
-        
         # Parse tags
         tag_list = []
         if tags:
@@ -91,7 +84,6 @@ async def upload_document(
             "file_path": file.filename,
             "file_size": len(file_content),
             "file_type": file_type,
-            "vector_embedding": embedding,
             "metadata": {
                 "original_filename": file.filename,
                 "file_size_bytes": len(file_content)
@@ -178,8 +170,6 @@ async def update_document(
             update_data["title"] = document_update.title
         if document_update.content is not None:
             update_data["content"] = document_update.content
-            # Regenerate embedding if content changed
-            update_data["vector_embedding"] = ai_service.generate_embedding(document_update.content)
         if document_update.summary is not None:
             update_data["summary"] = document_update.summary
         if document_update.category is not None:

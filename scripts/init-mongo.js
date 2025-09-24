@@ -9,7 +9,6 @@ db.documents.createIndex({ "title": "text", "content": "text", "summary": "text"
 db.documents.createIndex({ "category": 1 });
 db.documents.createIndex({ "date_created": -1 });
 db.documents.createIndex({ "tags": 1 });
-db.documents.createIndex({ "vector_embedding": 1 });
 
 // Insert sample documents
 db.documents.insertMany([

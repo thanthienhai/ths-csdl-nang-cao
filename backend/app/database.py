@@ -18,16 +18,6 @@ async def create_indexes(db: AsyncIOMotorDatabase):
             ("summary", "text")
         ])
         
-        # Index for vector search (MongoDB Atlas Vector Search compatible)
-        try:
-            await db.documents.create_index([("vector_embedding", "2dsphere")])
-            logger.info("Created vector search index (2dsphere)")
-        except Exception as e:
-            logger.warning(f"Could not create 2dsphere index: {e}")
-            # Fallback to regular index for local MongoDB
-            await db.documents.create_index([("vector_embedding", 1)])
-            logger.info("Created fallback vector index")
-        
         # Index for metadata search
         await db.documents.create_index([("category", 1)])
         await db.documents.create_index([("date_created", -1)])
