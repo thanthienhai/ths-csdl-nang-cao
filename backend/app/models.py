@@ -1,27 +1,17 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 
-class PyObjectId(ObjectId):
-    """Custom ObjectId type for Pydantic"""
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
-
 class DocumentModel(BaseModel):
     """Document model for legal documents"""
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
+    id: Optional[str] = Field(default=None, alias="_id")
     title: str = Field(..., min_length=1, max_length=500)
     content: str = Field(..., min_length=1)
     summary: Optional[str] = None
@@ -34,11 +24,22 @@ class DocumentModel(BaseModel):
     file_type: Optional[str] = None
     vector_embedding: Optional[List[float]] = None
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    
+    @classmethod
+    def from_mongo(cls, data: dict):
+        """Convert MongoDB document to Pydantic model"""
+        if "_id" in data:
+            data["_id"] = str(data["_id"])
+        return cls(**data)
+    
+    def to_mongo(self) -> dict:
+        """Convert Pydantic model to MongoDB document"""
+        data = self.model_dump(by_alias=True, exclude_unset=True)
+        if "_id" in data and data["_id"]:
+            data["_id"] = ObjectId(data["_id"])
+        elif "_id" in data and not data["_id"]:
+            data.pop("_id")
+        return data
 
 class DocumentCreate(BaseModel):
     """Model for creating new documents"""
