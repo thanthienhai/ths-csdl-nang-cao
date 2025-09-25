@@ -14,6 +14,7 @@ from app.config import settings
 from app.database import get_database, create_indexes
 from app.mongodb_utils import create_async_client
 from app.routers import documents, search, qa
+from app.routers import crawling, enhanced_processing, advanced_search, text_analysis, reports
 
 # Load environment variables
 load_dotenv()
@@ -145,6 +146,13 @@ app.add_middleware(
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
 app.include_router(qa.router, prefix="/api/qa", tags=["qa"])
+
+# Include new enhanced routers
+app.include_router(crawling.router, prefix="/api", tags=["crawling"])
+app.include_router(enhanced_processing.router, prefix="/api", tags=["document-processing"])
+app.include_router(advanced_search.router, prefix="/api", tags=["advanced-search"])
+app.include_router(text_analysis.router, prefix="/api", tags=["text-analysis"])
+app.include_router(reports.router, prefix="/api", tags=["reports-dashboard"])
 
 @app.get("/")
 async def root():
