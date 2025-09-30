@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from typing import List, Optional
 from datetime import datetime
 import logging
 from bson import ObjectId
+import os
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.database import get_database
 from app.models import DocumentModel, DocumentCreate, DocumentUpdate
@@ -41,38 +43,41 @@ async def create_document(
         
         # Retrieve and return the created document
         created_document = await db.documents.find_one({"_id": result.inserted_id})
-        return DocumentModel(**created_document)
-        
+        return DocumentModel.from_mongo(created_document)
+
     except Exception as e:
         logger.error(f"Failed to create document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/upload", response_model=DocumentModel)
 async def upload_document(
-    title: str,
-    category: str,
-    tags: Optional[str] = None,
+    title: str = Form(...),
+    category: str = Form(...),
+    tags: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Upload and process a document file"""
     try:
-        # Read file content
-        file_content = await file.read()
-        
+        # Save original file
+        upload_dir = os.path.join(os.path.dirname(__file__), '../../uploads')
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, file.filename)
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+        # Re-read file for processing
+        with open(file_path, "rb") as f:
+            file_content = f.read()
         # Process the uploaded file
         extracted_text, file_type = await document_processor.process_uploaded_file(
             file_content, file.filename
         )
-        
         # Generate summary
         summary = document_processor.generate_summary(extracted_text)
-        
         # Parse tags
         tag_list = []
         if tags:
             tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-        
         # Create document data
         document_data = {
             "title": title,
@@ -81,7 +86,7 @@ async def upload_document(
             "category": category,
             "tags": tag_list,
             "date_created": datetime.utcnow(),
-            "file_path": file.filename,
+            "file_path": file_path,
             "file_size": len(file_content),
             "file_type": file_type,
             "metadata": {
@@ -89,14 +94,11 @@ async def upload_document(
                 "file_size_bytes": len(file_content)
             }
         }
-        
         # Insert document
         result = await db.documents.insert_one(document_data)
-        
         # Retrieve and return the created document
         created_document = await db.documents.find_one({"_id": result.inserted_id})
-        return DocumentModel(**created_document)
-        
+        return DocumentModel.from_mongo(created_document)
     except Exception as e:
         logger.error(f"Failed to upload document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -118,9 +120,15 @@ async def get_documents(
         # Execute query
         cursor = db.documents.find(query).skip(skip).limit(limit).sort("date_created", -1)
         documents = await cursor.to_list(length=limit)
-        
-        return [DocumentModel(**doc) for doc in documents]
-        
+        # Convert _id to str for each document and use from_mongo
+        valid_documents = []
+        for doc in documents:
+            try:
+                valid_documents.append(DocumentModel.from_mongo(doc))
+            except Exception as e:
+                logger.error(f"Invalid document skipped: {e}, doc: {doc}")
+        return valid_documents
+
     except Exception as e:
         logger.error(f"Failed to get documents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -141,9 +149,8 @@ async def get_document(
         
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
-        
-        return DocumentModel(**document)
-        
+        return DocumentModel.from_mongo(document)
+
     except HTTPException:
         raise
     except Exception as e:
@@ -191,7 +198,7 @@ async def update_document(
         # Retrieve and return updated document
         updated_document = await db.documents.find_one({"_id": ObjectId(document_id)})
         return DocumentModel(**updated_document)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -232,4 +239,44 @@ async def get_categories(db: AsyncIOMotorDatabase = Depends(get_database)):
         
     except Exception as e:
         logger.error(f"Failed to get categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """Download the original document file if available, else extracted text"""
+    try:
+        if not ObjectId.is_valid(document_id):
+            logger.error(f"Invalid document ID for download: {document_id}")
+            raise HTTPException(status_code=400, detail="Invalid document ID")
+        document = await db.documents.find_one({"_id": ObjectId(document_id)})
+        if not document:
+            logger.error(f"Document not found for download: {document_id}")
+            raise HTTPException(status_code=404, detail="Document not found")
+        file_path = document.get("file_path")
+        if file_path and os.path.exists(file_path):
+            # Get original filename and file type from metadata
+            metadata = document.get("metadata", {})
+            original_filename = metadata.get("original_filename", os.path.basename(file_path))
+            file_type = document.get("file_type", None)
+            return FileResponse(
+                file_path,
+                filename=original_filename,
+                media_type=file_type if file_type else "application/octet-stream"
+            )
+        else:
+            content = document.get("content", "")
+            if not content:
+                logger.error(f"No file or content for document: {document_id}")
+                raise HTTPException(status_code=404, detail="No file or content available")
+            import io
+            return StreamingResponse(io.BytesIO(content.encode("utf-8")),
+                                     media_type="text/plain",
+                                     headers={"Content-Disposition": f"attachment; filename=document_{document_id}.txt"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download document {document_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

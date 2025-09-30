@@ -37,6 +37,8 @@ const DocumentPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null);
 
   const limit = 12;
 
@@ -64,6 +66,32 @@ const DocumentPage: React.FC = () => {
   const handleCloseDialog = () => {
     setViewDialogOpen(false);
     setSelectedDocument(null);
+  };
+
+  // Download handler
+  const handleDownloadDocument = (documentId: string) => {
+    documentApi.downloadDocument(documentId);
+  };
+
+  // Delete handler
+  const handleOpenDeleteDialog = (document: Document) => {
+    setDocumentToDelete(document);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setDocumentToDelete(null);
+  };
+
+  const handleDeleteDocument = async () => {
+    if (documentToDelete) {
+      await documentApi.deleteDocument(documentToDelete.id);
+      setDeleteDialogOpen(false);
+      setDocumentToDelete(null);
+      // Optionally, refetch documents here
+      window.location.reload();
+    }
   };
 
   // Filter documents by search term
@@ -201,10 +229,10 @@ const DocumentPage: React.FC = () => {
                     <IconButton size="small" color="primary">
                       <EditIcon />
                     </IconButton>
-                    <IconButton size="small" color="error">
+                    <IconButton size="small" color="error" onClick={() => handleOpenDeleteDialog(document)}>
                       <DeleteIcon />
                     </IconButton>
-                    <IconButton size="small">
+                    <IconButton size="small" onClick={() => handleDownloadDocument(document.id)}>
                       <DownloadIcon />
                     </IconButton>
                   </Box>
@@ -303,8 +331,24 @@ const DocumentPage: React.FC = () => {
           <Button onClick={handleCloseDialog}>Đóng</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+      >
+        <DialogTitle>Xác nhận xóa tài liệu</DialogTitle>
+        <DialogContent>
+          Bạn có chắc chắn muốn xóa tài liệu "{documentToDelete?.title}"?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog} color="primary">Hủy</Button>
+          <Button onClick={handleDeleteDocument} color="error">Xóa</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
 export default DocumentPage;
+

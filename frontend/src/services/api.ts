@@ -32,18 +32,18 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('auth_token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+// // Response interceptor
+// api.interceptors.response.use(
+//   (response) => response,
+//   (error) => {
+//     if (error.response?.status === 401) {
+//       // Handle unauthorized access
+//       localStorage.removeItem('auth_token');
+//       window.location.href = '/login';
+//     }
+//     return Promise.reject(error);
+//   }
+// );
 
 // Document API
 export const documentApi = {
@@ -59,7 +59,8 @@ export const documentApi = {
     if (category) params.append('category', category);
 
     const response = await api.get(`/documents?${params}`);
-    return response.data;
+    // Map _id to id for each document
+    return response.data.map((doc: any) => ({ ...doc, id: doc._id }));
   },
 
   // Get document by ID
@@ -123,6 +124,30 @@ export const documentApi = {
     const response = await api.get('/documents/categories/list');
     return response.data.categories;
   },
+
+  // Download document file
+  downloadDocument: async (id: string): Promise<void> => {
+    const response = await api.get(`/documents/${id}/download`, {
+      responseType: 'blob',
+    });
+    // Get filename from response headers or fallback
+    const disposition = response.headers['content-disposition'];
+    let filename = 'document.txt';
+    if (disposition) {
+      const match = disposition.match(/filename="?([^";]+)"?/);
+      if (match) filename = match[1];
+    }
+    // Create a link and trigger download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
 };
 
 // Search API
