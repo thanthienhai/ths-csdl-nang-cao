@@ -127,16 +127,18 @@ const UploadPage: React.FC = () => {
     event.preventDefault();
   };
 
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      const fakeEvent = {
-        target: { files: [file] }
-      } as React.ChangeEvent<HTMLInputElement>;
-      handleFileSelect(fakeEvent);
-    }
-  };
+const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  event.preventDefault();
+  const file = event.dataTransfer.files[0];
+  if (file) {
+    const fileList = new DataTransfer();
+    fileList.items.add(file);
+    const fakeEvent = {
+      target: { files: fileList.files },
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+    handleFileSelect(fakeEvent);
+  }
+};
 
   const tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
 
@@ -297,7 +299,9 @@ const UploadPage: React.FC = () => {
                 
                 {uploadProgress.status === 'error' && (
                   <Alert severity="error">
-                    {uploadProgress.message}
+                    {typeof uploadProgress.message === 'object'
+                      ? JSON.stringify(uploadProgress.message)
+                      : uploadProgress.message}
                   </Alert>
                 )}
               </CardContent>

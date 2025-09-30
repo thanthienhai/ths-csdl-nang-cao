@@ -21,57 +21,74 @@ async def search_documents(
     try:
         # Build MongoDB query
         query = {}
-        
+
         # Add category filter
         if search_request.category:
             query["category"] = search_request.category
-        
+
         # Add tags filter
         if search_request.tags:
             query["tags"] = {"$in": search_request.tags}
-        
-        # Add text search if query provided
+        # Nếu có query, thử text search, nếu không thì lấy tất cả
+        use_text_search = False
         if search_request.query:
-            query["$text"] = {"$search": search_request.query}
-        
-        # Execute search with sorting and pagination
+            try:
+                query["$text"] = {"$search": search_request.query}
+                use_text_search = True
+            except Exception as e:
+                logger.error(f"Text search not available: {e}")
         cursor = db.documents.find(query)
-        
-        # Sort by text score if query provided, otherwise by date
-        if search_request.query:
-            cursor.sort([("score", {"$meta": "textScore"})])
+        if use_text_search:
+            try:
+                cursor.sort([("score", {"$meta": "textScore"})])
+            except Exception as e:
+                logger.error(f"Text score sort failed: {e}")
+                cursor.sort("date_created", -1)
         else:
             cursor.sort("date_created", -1)
-        
+
         # Apply pagination
         cursor.skip(search_request.offset).limit(search_request.limit)
         documents = await cursor.to_list(length=search_request.limit)
-        
+
         # Prepare results
         results = []
         for doc in documents:
-            document_model = DocumentModel(**doc)
-            
-            # Get text score or use default
-            score = 1.0
-            if search_request.query:
+            try:
+                document_model = DocumentModel(**doc)
                 score = doc.get("score", 1.0)
-            
-            # Generate simple highlights
-            highlights = generate_highlights(search_request.query or "", doc.get("content", ""))
-            
-            result = SearchResult(
-                document=document_model,
-                score=score,
-                highlights=highlights
-            )
-            results.append(result)
-        
-        # Get total count
+                highlights = generate_highlights(search_request.query or "", doc.get("content", ""))
+                result = SearchResult(document=document_model, score=score, highlights=highlights)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Invalid document skipped: {e}, doc: {doc}")
         total_count = await db.documents.count_documents(query)
-        
+
+        # Nếu không có text index hoặc không có kết quả, fallback về tìm kiếm thủ công trên content/title/summary
+        if search_request.query and len(results) == 0:
+            # Tìm kiếm thủ công nếu text search không có kết quả
+            manual_query = {"category": query.get("category"), "tags": query.get("tags")}
+            manual_query = {k: v for k, v in manual_query.items() if v}
+            all_docs = await db.documents.find(manual_query).to_list(length=1000)
+            for doc in all_docs:
+                content = doc.get("content", "")
+                title = doc.get("title", "")
+                summary = doc.get("summary", "")
+                if (search_request.query.lower() in content.lower() or
+                    search_request.query.lower() in title.lower() or
+                    search_request.query.lower() in summary.lower()):
+                    try:
+                        document_model = DocumentModel(**doc)
+                        score = 1.0
+                        highlights = generate_highlights(search_request.query, content)
+                        result = SearchResult(document=document_model, score=score, highlights=highlights)
+                        results.append(result)
+                    except Exception as e:
+                        logger.error(f"Manual search: Invalid document skipped: {e}, doc: {doc}")
+            total_count = len(results)
+
         execution_time = time.time() - start_time
-        
+
         return SearchResponse(
             results=results,
             total_count=total_count,
