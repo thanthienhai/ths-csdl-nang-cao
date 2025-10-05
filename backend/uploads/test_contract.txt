@@ -1,0 +1,13 @@
+
+            SAMPLE LEGAL CONTRACT
+            
+            This is a sample legal contract document containing terms and conditions
+            for testing purposes. It includes various legal clauses and provisions
+            that would typically be found in a commercial agreement.
+            
+            Terms:
+            1. Payment terms and conditions
+            2. Liability and indemnification clauses  
+            3. Termination conditions
+            4. Intellectual property rights
+            

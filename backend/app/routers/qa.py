@@ -43,7 +43,7 @@ async def ask_question(
         source_documents = []
         
         for doc in relevant_docs:
-            document_model = DocumentModel(**doc)
+            document_model = DocumentModel.from_mongo(doc)
             context_texts.append(doc.get("content", ""))
             source_documents.append(document_model)
         

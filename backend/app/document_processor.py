@@ -1,4 +1,4 @@
-from PyPDF2 import PdfReader
+import fitz  # PyMuPDF
 from docx import Document
 import os
 import tempfile
@@ -14,10 +14,12 @@ class DocumentProcessor:
     def extract_text_from_pdf(file_path: str) -> str:
         """Extract text from PDF file"""
         try:
-            reader = PdfReader(file_path)
+            doc = fitz.open(file_path)
             text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
+            for page_num in range(doc.page_count):
+                page = doc[page_num]
+                text += page.get_text() + "\n"
+            doc.close()
             return text.strip()
         except Exception as e:
             logger.error(f"Failed to extract text from PDF: {e}")

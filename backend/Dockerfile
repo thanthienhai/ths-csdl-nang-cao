@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Set environment variables to handle network timeouts
+ENV PIP_DEFAULT_TIMEOUT=100
+ENV PIP_RETRIES=3
+
 WORKDIR /app
 
 # Install system dependencies
@@ -10,7 +14,8 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --timeout 100 --retries 3 -r requirements.txt
 
 # Copy application code
 COPY . .

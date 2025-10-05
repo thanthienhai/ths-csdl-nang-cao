@@ -7,7 +7,6 @@ import {
   SearchResponse,
   QARequest,
   QAResponse,
-  ApiError,
 } from '../types/api';
 
 // Create axios instance with base configuration

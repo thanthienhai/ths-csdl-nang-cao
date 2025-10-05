@@ -1302,7 +1302,7 @@ flowchart TD
 ### Các điểm cần lưu ý cho Business Analyst:
 1. **Multilingual Support**: Hệ thống được tối ưu cho tiếng Việt nhưng có thể mở rộng cho nhiều ngôn ngữ
 2. **Scalability**: Kiến trúc cho phép scale horizontal với MongoDB sharding
-3. **AI Integration**: Có thể tích hợp thêm các AI models khác (GPT, Claude) cho Q&A
+3. **AI Integration**: Có thể tích hợp thêm các AI models khác (Gemini Pro, Claude) cho Q&A
 4. **Mobile Responsive**: Frontend được thiết kế responsive cho mobile
 5. **Offline Capability**: Có thể phát triển PWA cho chức năng offline
 6. **User Authentication**: Hệ thống hỗ trợ đăng ký, đăng nhập với JWT và email verification

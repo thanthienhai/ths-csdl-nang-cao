@@ -167,7 +167,7 @@ const HomePage: React.FC = () => {
           Công nghệ sử dụng
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          <strong>Backend:</strong> Python + FastAPI + MongoDB + Sentence-BERT + OpenAI
+          <strong>Backend:</strong> Python + FastAPI + MongoDB + Sentence-BERT + Gemini
           <br />
           <strong>Frontend:</strong> React + TypeScript + Material-UI + React Query
         </Typography>

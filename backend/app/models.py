@@ -131,7 +131,7 @@ class DocumentProcessingResponse(BaseModel):
 class AdvancedSearchRequest(BaseModel):
     """Model for advanced search requests"""
     query: str = Field(..., min_length=1, max_length=1000)
-    search_type: str = Field(default="full_text", regex="^(full_text|boolean|phrase|proximity|wildcard|field_specific)$")
+    search_type: str = Field(default="full_text", pattern="^(full_text|boolean|phrase|proximity|wildcard|field_specific)$")
     
     # Boolean search specific
     boolean_operators: Optional[List[str]] = None
@@ -149,7 +149,7 @@ class AdvancedSearchRequest(BaseModel):
     # Pagination and sorting
     limit: int = Field(default=10, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
-    sort_by: str = Field(default="relevance", regex="^(relevance|date_desc|date_asc|title|issue_date)$")
+    sort_by: str = Field(default="relevance", pattern="^(relevance|date_desc|date_asc|title|issue_date)$")
 
 class SearchHighlight(BaseModel):
     """Model for search highlights"""
@@ -177,7 +177,7 @@ class AdvancedSearchResponse(BaseModel):
 
 class TextAnalysisRequest(BaseModel):
     """Model for text analysis requests"""
-    analysis_type: str = Field(..., regex="^(document_frequency|term_frequency|citation_network|clustering|keywords|conflict_detection|timeline)$")
+    analysis_type: str = Field(..., pattern="^(document_frequency|term_frequency|citation_network|clustering|keywords|conflict_detection|timeline)$")
     
     # Common parameters
     document_id: Optional[str] = None
@@ -261,7 +261,7 @@ class TimelineAnalysisResult(BaseModel):
 class ComplexQueryRequest(BaseModel):
     """Model for complex query builder requests"""
     conditions: List[Dict[str, Any]]
-    logical_operator: str = Field(default="AND", regex="^(AND|OR)$")
+    logical_operator: str = Field(default="AND", pattern="^(AND|OR)$")
     facets: Optional[List[str]] = None
     date_ranges: Optional[Dict[str, Dict[str, datetime]]] = None
     geospatial: Optional[Dict[str, Any]] = None
@@ -284,10 +284,10 @@ class ComplexQueryResponse(BaseModel):
 
 class ReportRequest(BaseModel):
     """Model for report generation requests"""
-    report_type: str = Field(..., regex="^(search_analytics|document_statistics|compliance_tracking|usage_metrics|performance_monitoring)$")
+    report_type: str = Field(..., pattern="^(search_analytics|document_statistics|compliance_tracking|usage_metrics|performance_monitoring)$")
     time_period_days: int = Field(default=30, ge=1, le=365)
     filters: Optional[Dict[str, Any]] = None
-    format: str = Field(default="json", regex="^(json|csv|pdf)$")
+    format: str = Field(default="json", pattern="^(json|csv|pdf)$")
 
 class SearchAnalyticsReport(BaseModel):
     """Model for search analytics report"""
@@ -338,7 +338,7 @@ class PerformanceMonitoringReport(BaseModel):
 
 class BatchProcessingRequest(BaseModel):
     """Model for batch processing requests"""
-    operation: str = Field(..., regex="^(import|export|analyze|update|delete)$")
+    operation: str = Field(..., pattern="^(import|export|analyze|update|delete)$")
     file_paths: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
     processing_options: Optional[Dict[str, Any]] = None

@@ -19,7 +19,7 @@ aiohttp==3.9.1
 requests==2.31.0
 
 # Document processing
-PyPDF2==3.0.1
+PyMuPDF==1.23.5
 python-docx==1.1.0
 odfpy==1.4.1
 striprtf==0.0.26

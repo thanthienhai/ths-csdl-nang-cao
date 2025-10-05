@@ -50,8 +50,8 @@ Hệ thống số hóa và tra cứu văn bản pháp luật với AI, giúp tì
 git clone https://github.com/thanthienhai/ths-csdl-nang-cao.git
 cd ths-csdl-nang-cao
 
-# Tạo file environment (tùy chọn: thêm OpenAI API key)
-echo "OPENAI_API_KEY=your-openai-api-key-here" > .env
+# Tạo file environment (tùy chọn: thêm Gemini API key)
+echo "GEMINI_API_KEY=your-gemini-api-key-here" > .env
 
 # Chạy tất cả services
 docker-compose up -d
@@ -82,7 +82,7 @@ pip install -r requirements.txt
 
 # Copy và chỉnh sửa file environment
 cp .env.example .env
-# Chỉnh sửa .env với thông tin MongoDB và OpenAI API key
+# Chỉnh sửa .env với thông tin MongoDB và Gemini API key
 
 # Chạy server
 uvicorn main:app --reload
@@ -145,7 +145,8 @@ MONGODB_URL=mongodb://localhost:27017
 DATABASE_NAME=legal_documents
 
 # AI
-OPENAI_API_KEY=your-openai-api-key-here
+GEMINI_API_KEY=your-gemini-api-key-here
+GEMINI_MODEL=gemini-2.5-flash
 SENTENCE_TRANSFORMER_MODEL=sentence-transformers/all-MiniLM-L6-v2
 
 # Security
@@ -160,9 +161,9 @@ MAX_UPLOAD_SIZE=10485760  # 10MB
 
 Hệ thống sử dụng:
 - **Sentence-BERT**: `all-MiniLM-L6-v2` cho vector embedding
-- **OpenAI GPT**: Cho Q&A (cần API key)
+- **Google Gemini**: Cho Q&A (cần API key)
 
-Nếu không có OpenAI API key, hệ thống sẽ dùng phương pháp fallback đơn giản.
+Nếu không có Gemini API key, hệ thống sẽ dùng phương pháp fallback đơn giản.
 
 ## 🧪 Testing
 
@@ -231,4 +232,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 - [Material-UI](https://mui.com/)
 - [MongoDB](https://www.mongodb.com/)
 - [Sentence Transformers](https://www.sbert.net/)
-- [OpenAI](https://openai.com/)
+- [Google Gemini](https://ai.google.dev/)

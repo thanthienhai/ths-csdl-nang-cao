@@ -45,12 +45,19 @@ class AIService:
     async def generate_answer(self, question: str, context_documents: List[str]) -> tuple[str, float]:
         """Generate answer using Gemini AI based on context documents"""
         try:
+            logger.info(f"Generating answer for question: {question[:50]}...")
+            logger.info(f"Gemini client available: {self.gemini_client is not None}")
+            logger.info(f"GEMINI_AVAILABLE: {GEMINI_AVAILABLE}")
+            logger.info(f"API Key configured: {bool(settings.GEMINI_API_KEY)}")
+            
             if not self.gemini_client or not GEMINI_AVAILABLE:
+                logger.warning("Falling back to simple answer generation")
                 # Fallback to simple context-based answer
                 return await self._generate_simple_answer(question, context_documents)
             
             # Prepare context from documents
             context = "\n\n".join([f"Tài liệu {i+1}:\n{doc}" for i, doc in enumerate(context_documents)])
+            logger.info(f"Context length: {len(context)} characters")
             
             # Create prompt for Gemini
             prompt = f"""Dựa trên các tài liệu pháp luật sau đây, hãy trả lời câu hỏi một cách chính xác và súc tích.
@@ -77,21 +84,85 @@ Trả lời (chỉ dựa trên các tài liệu được cung cấp):"""
                 max_output_tokens=500,
             )
             
-            # Generate content with Gemini
-            response = await asyncio.to_thread(
-                self.gemini_client.models.generate_content,
-                model=settings.GEMINI_MODEL,
-                contents=contents,
-                config=generate_content_config,
-            )
+            logger.info(f"Calling Gemini with model: {settings.GEMINI_MODEL}")
             
-            answer = response.text.strip() if response.text else "Không thể tạo phản hồi từ Gemini."
+            # Generate content with Gemini
+            try:
+                response = await asyncio.to_thread(
+                    self.gemini_client.models.generate_content,
+                    model=settings.GEMINI_MODEL,
+                    contents=contents,
+                    config=generate_content_config,
+                )
+                
+                logger.info(f"Gemini response received. Response object: {type(response)}")
+                logger.info(f"Response attributes: {dir(response) if response else 'None'}")
+                
+                if response:
+                    logger.info(f"Has text attribute: {hasattr(response, 'text')}")
+                    if hasattr(response, 'text'):
+                        logger.info(f"Text content: '{response.text}'")
+                        logger.info(f"Text is None: {response.text is None}")
+                        logger.info(f"Text is empty: {not response.text}")
+                    
+                    # Try different ways to get the response
+                    if hasattr(response, 'candidates') and response.candidates:
+                        logger.info(f"Number of candidates: {len(response.candidates)}")
+                        candidate = response.candidates[0]
+                        logger.info(f"Candidate attributes: {dir(candidate) if candidate else 'None'}")
+                        
+                        if hasattr(candidate, 'content') and candidate.content:
+                            logger.info(f"Content attributes: {dir(candidate.content)}")
+                            if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                                part = candidate.content.parts[0]
+                                if hasattr(part, 'text') and part.text:
+                                    answer = part.text.strip()
+                                    logger.info(f"Got answer from candidate.content.parts[0].text: {len(answer)} chars")
+                                else:
+                                    logger.warning("candidate.content.parts[0] has no text")
+                            else:
+                                logger.warning("candidate.content has no parts")
+                        else:
+                            logger.warning("candidate has no content")
+                            
+                        # Check if content was blocked
+                        if hasattr(candidate, 'finish_reason'):
+                            logger.info(f"Finish reason: {candidate.finish_reason}")
+                            
+                        if hasattr(candidate, 'safety_ratings'):
+                            logger.info(f"Safety ratings: {candidate.safety_ratings}")
+                            
+                    else:
+                        logger.warning("Response has no candidates")
+                        
+                    # Check prompt feedback for safety issues
+                    if hasattr(response, 'prompt_feedback') and response.prompt_feedback:
+                        logger.info(f"Prompt feedback: {response.prompt_feedback}")
+                    
+                    # If we didn't get an answer, fall back to simple processing
+                    if 'answer' not in locals():
+                        logger.warning("No answer extracted from Gemini, falling back to simple answer")
+                        return await self._generate_simple_answer(question, context_documents)
+                
+            except Exception as api_error:
+                logger.error(f"Gemini API call failed: {str(api_error)}")
+                logger.error(f"API Error type: {type(api_error).__name__}")
+                raise api_error
+            
+            if response and hasattr(response, 'text') and response.text:
+                answer = response.text.strip()
+                logger.info(f"Generated answer length: {len(answer)}")
+            elif 'answer' not in locals():
+                logger.warning("Gemini response was empty or invalid")
+                answer = "Gemini đã phản hồi nhưng không có nội dung."
+            
             confidence = 0.8  # Default confidence for Gemini responses
             
             return answer, confidence
             
         except Exception as e:
-            logger.error(f"Failed to generate answer with Gemini: {e}")
+            logger.error(f"Failed to generate answer with Gemini: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
             # Fallback to simple answer
             return await self._generate_simple_answer(question, context_documents)
     
@@ -149,7 +220,7 @@ Trả lời (chỉ dựa trên các tài liệu được cung cấp):"""
             yield f"Lỗi khi tạo phản hồi: {str(e)}"
     
     async def _generate_simple_answer(self, question: str, context_documents: List[str]) -> tuple[str, float]:
-        """Generate a simple answer when OpenAI is not available"""
+        """Generate a simple answer when Gemini is not available"""
         try:
             # Simple keyword-based answer generation
             question_lower = question.lower()

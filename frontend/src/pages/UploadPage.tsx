@@ -24,7 +24,6 @@ import {
 import {
   CloudUpload as UploadIcon,
   CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
   Description as FileIcon,
 } from '@mui/icons-material';
 import { documentApi } from '../services/api';

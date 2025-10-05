@@ -6,13 +6,16 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
 
+# Set Node.js options for compatibility with older Webpack
+ENV NODE_OPTIONS="--openssl-legacy-provider"
+
 # Expose port
 EXPOSE 3000
 
-# Start the application
+# Start the development server
 CMD ["npm", "start"]

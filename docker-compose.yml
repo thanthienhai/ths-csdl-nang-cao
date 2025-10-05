@@ -23,6 +23,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     container_name: legal-docs-backend
     restart: unless-stopped
     ports:
@@ -31,32 +33,13 @@ services:
       MONGODB_URL: mongodb://admin:password123@mongodb:27017/legal_documents?authSource=admin
       DATABASE_NAME: legal_documents
       SECRET_KEY: your-super-secret-key-change-this-in-production
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      SENTENCE_TRANSFORMER_MODEL: sentence-transformers/all-MiniLM-L6-v2
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
     depends_on:
       - mongodb
     volumes:
       - ./backend:/app
       - backend_cache:/app/.cache
-    networks:
-      - legal-docs-network
-
-  # Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: legal-docs-frontend
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      REACT_APP_API_URL: http://localhost:8000/api
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     networks:
       - legal-docs-network
 

@@ -12,7 +12,7 @@ import json
 import hashlib
 
 # Core document processing
-from PyPDF2 import PdfReader
+import fitz  # PyMuPDF
 from docx import Document
 
 # OCR and image processing
@@ -119,11 +119,12 @@ class EnhancedDocumentProcessor:
     async def _process_pdf(self, file_path: str) -> str:
         """Process PDF with enhanced text extraction"""
         try:
-            reader = PdfReader(file_path)
+            doc = fitz.open(file_path)
             text = ""
             
-            for page_num, page in enumerate(reader.pages):
-                page_text = page.extract_text()
+            for page_num in range(doc.page_count):
+                page = doc[page_num]
+                page_text = page.get_text()
                 
                 # If text extraction fails or returns poor quality, try OCR
                 if not page_text.strip() or len(page_text.strip()) < 50:
@@ -134,6 +135,7 @@ class EnhancedDocumentProcessor:
                 
                 text += f"[Page {page_num + 1}]\n{page_text}\n\n"
             
+            doc.close()
             return text.strip()
             
         except Exception as e:

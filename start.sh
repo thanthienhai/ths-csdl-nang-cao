@@ -12,7 +12,7 @@ fi
 if [ ! -f ".env" ]; then
     echo "📝 Creating .env file from template..."
     cp .env.example .env
-    echo "⚠️  Please edit .env file and add your OpenAI API key if you want to use Q&A features."
+    echo "⚠️  Please edit .env file and add your Gemini API key if you want to use Q&A features."
 fi
 
 # Start services
