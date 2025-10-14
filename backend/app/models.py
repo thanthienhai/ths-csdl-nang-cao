@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
@@ -60,7 +61,7 @@ class DocumentUpdate(BaseModel):
 
 class SearchRequest(BaseModel):
     """Model for search requests"""
-    query: str = Field(..., min_length=1, max_length=1000)
+    query: Optional[str] = Field(default="", max_length=1000)
     category: Optional[str] = None
     tags: Optional[List[str]] = None
     limit: Optional[int] = Field(default=10, ge=1, le=100)
@@ -90,7 +91,7 @@ class QAResponse(BaseModel):
     question: str
     answer: str
     confidence: float
-    sources: List[DocumentModel]
+    sources: List[DocumentModel]  # Temporarily using DocumentModel to avoid circular reference
     execution_time: float
 
 # Enhanced models for new functionality
@@ -346,12 +347,103 @@ class BatchProcessingRequest(BaseModel):
 
 class BatchProcessingResponse(BaseModel):
     """Model for batch processing response"""
-    job_id: str
+    processed_count: int
+    failed_count: int
+    success_rate: float
+    processing_time: float
+    results: List[str]
+
+# RAG and Chunking Models
+
+class DocumentChunk(BaseModel):
+    """Model for document chunks for RAG"""
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
+    id: Optional[str] = Field(default=None, alias="_id")
+    document_id: str = Field(..., description="Reference to parent document")
+    chunk_index: int = Field(..., ge=0, description="Index of chunk in document")
+    content: str = Field(..., min_length=1, description="Chunk content")
+    content_length: int = Field(..., ge=1, description="Length of chunk content")
+    
+    # Chunk metadata
+    start_position: int = Field(..., ge=0, description="Start position in original document")
+    end_position: int = Field(..., ge=0, description="End position in original document")
+    chunk_type: str = Field(default="text", description="Type of chunk (text, table, etc.)")
+    
+    # Vector embeddings (optional - will be populated by embedding service)
+    embedding: Optional[List[float]] = Field(default=None, description="Vector embedding")
+    embedding_model: Optional[str] = Field(default=None, description="Model used for embedding")
+    
+    # Metadata for better context
+    section_title: Optional[str] = Field(default=None, description="Section title if available")
+    page_number: Optional[int] = Field(default=None, description="Page number in original document")
+    
+    # Timestamps
+    date_created: datetime = Field(default_factory=datetime.utcnow)
+    date_updated: Optional[datetime] = None
+    
+    @classmethod
+    def from_mongo(cls, data: dict):
+        """Convert MongoDB document to Pydantic model"""
+        if "_id" in data:
+            data["_id"] = str(data["_id"])
+        return cls(**data)
+    
+    def to_mongo(self) -> dict:
+        """Convert Pydantic model to MongoDB document"""
+        data = self.model_dump(by_alias=True, exclude_unset=True)
+        if "_id" in data and data["_id"]:
+            data["_id"] = ObjectId(data["_id"])
+        elif "_id" in data and not data["_id"]:
+            data.pop("_id")
+        return data
+
+class ChunkingRequest(BaseModel):
+    """Model for chunking requests"""
+    document_id: str = Field(..., description="Document ID to chunk")
+    chunk_size: int = Field(default=1000, ge=100, le=4000, description="Target size for each chunk")
+    chunk_overlap: int = Field(default=200, ge=0, le=1000, description="Overlap between chunks")
+    chunk_strategy: str = Field(default="recursive", pattern="^(recursive|sentence|paragraph|semantic)$")
+    preserve_structure: bool = Field(default=True, description="Try to preserve document structure")
+    generate_embeddings: bool = Field(default=True, description="Generate embeddings for chunks")
+
+class ChunkingResponse(BaseModel):
+    """Model for chunking response"""
+    document_id: str
+    chunks_created: int
+    total_characters: int
+    average_chunk_size: float
+    embedding_model: Optional[str] = None
+    processing_time: float
     status: str
-    total_items: int
-    processed_items: int
-    failed_items: int
-    errors: List[str] = Field(default_factory=list)
-    started_at: datetime
-    completed_at: Optional[datetime] = None
-    estimated_completion: Optional[datetime] = None
+
+class RAGQueryRequest(BaseModel):
+    """Model for RAG query requests"""
+    question: str = Field(..., min_length=1, max_length=1000, description="Question to ask")
+    top_k: int = Field(default=5, ge=1, le=20, description="Number of most relevant chunks to retrieve")
+    similarity_threshold: float = Field(default=0.7, ge=0.0, le=1.0, description="Minimum similarity score")
+    category_filter: Optional[str] = Field(default=None, description="Filter by document category")
+    document_filter: Optional[str] = Field(default=None, description="Filter by specific document ID")
+    include_metadata: bool = Field(default=True, description="Include chunk metadata in response")
+
+class RetrievedChunk(BaseModel):
+    """Model for retrieved chunks in RAG"""
+    chunk: DocumentChunk
+    similarity_score: float
+    document_title: Optional[str] = None
+    document_category: Optional[str] = None
+
+class RAGQueryResponse(BaseModel):
+    """Model for RAG query response"""
+    question: str
+    answer: str
+    confidence: float
+    retrieved_chunks: List[RetrievedChunk]
+    total_chunks_searched: int
+    retrieval_time: float
+    generation_time: float
+    total_time: float

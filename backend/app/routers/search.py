@@ -31,10 +31,11 @@ async def search_documents(
             query["tags"] = {"$in": search_request.tags}
         # Nếu có query, thử text search, nếu không thì lấy tất cả
         use_text_search = False
-        if search_request.query:
+        if search_request.query and search_request.query.strip():
             try:
                 query["$text"] = {"$search": search_request.query}
                 use_text_search = True
+                logger.info(f"Using text search for query: {search_request.query}")
             except Exception as e:
                 logger.error(f"Text search not available: {e}")
         cursor = db.documents.find(query)
@@ -55,7 +56,7 @@ async def search_documents(
         results = []
         for doc in documents:
             try:
-                document_model = DocumentModel(**doc)
+                document_model = DocumentModel.from_mongo(doc)
                 score = doc.get("score", 1.0)
                 highlights = generate_highlights(search_request.query or "", doc.get("content", ""))
                 result = SearchResult(document=document_model, score=score, highlights=highlights)
@@ -78,7 +79,7 @@ async def search_documents(
                     search_request.query.lower() in title.lower() or
                     search_request.query.lower() in summary.lower()):
                     try:
-                        document_model = DocumentModel(**doc)
+                        document_model = DocumentModel.from_mongo(doc)
                         score = 1.0
                         highlights = generate_highlights(search_request.query, content)
                         result = SearchResult(document=document_model, score=score, highlights=highlights)

@@ -154,6 +154,10 @@ app.include_router(advanced_search.router, prefix="/api", tags=["advanced-search
 app.include_router(text_analysis.router, prefix="/api", tags=["text-analysis"])
 app.include_router(reports.router, prefix="/api", tags=["reports-dashboard"])
 
+# Include chunking router
+from app.routers import chunking
+app.include_router(chunking.router, prefix="/api/chunks", tags=["chunking"])
+
 @app.get("/")
 async def root():
     """Root endpoint"""

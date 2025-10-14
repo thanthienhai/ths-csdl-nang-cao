@@ -41,6 +41,26 @@ async def create_document(
         # Insert document
         result = await db.documents.insert_one(document_data)
         
+        # Auto-create chunks for the document
+        try:
+            from app.services.chunking_service import chunking_service
+            from app.models import ChunkingRequest
+            
+            chunk_request = ChunkingRequest(
+                document_id=str(result.inserted_id),
+                chunk_size=1000,
+                chunk_overlap=200,
+                chunk_strategy="recursive"
+            )
+            
+            await chunking_service.create_chunks_for_document(
+                db, str(result.inserted_id), chunk_request
+            )
+            logger.info(f"Auto-created chunks for document {result.inserted_id}")
+        except Exception as e:
+            logger.warning(f"Failed to auto-create chunks for document {result.inserted_id}: {e}")
+            # Don't fail the upload if chunking fails
+        
         # Retrieve and return the created document
         created_document = await db.documents.find_one({"_id": result.inserted_id})
         return DocumentModel.from_mongo(created_document)
@@ -96,6 +116,27 @@ async def upload_document(
         }
         # Insert document
         result = await db.documents.insert_one(document_data)
+        
+        # Auto-create chunks for the uploaded document
+        try:
+            from app.services.chunking_service import chunking_service
+            from app.models import ChunkingRequest
+            
+            chunk_request = ChunkingRequest(
+                document_id=str(result.inserted_id),
+                chunk_size=1000,
+                chunk_overlap=200,
+                chunk_strategy="recursive"
+            )
+            
+            await chunking_service.create_chunks_for_document(
+                db, str(result.inserted_id), chunk_request
+            )
+            logger.info(f"Auto-created chunks for uploaded document {result.inserted_id}")
+        except Exception as e:
+            logger.warning(f"Failed to auto-create chunks for uploaded document {result.inserted_id}: {e}")
+            # Don't fail the upload if chunking fails
+        
         # Retrieve and return the created document
         created_document = await db.documents.find_one({"_id": result.inserted_id})
         return DocumentModel.from_mongo(created_document)

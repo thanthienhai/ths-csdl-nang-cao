@@ -27,6 +27,15 @@ async def create_indexes(db: AsyncIOMotorDatabase):
         await db.documents.create_index([("category", 1), ("date_created", -1)])
         await db.documents.create_index([("tags", 1), ("category", 1)])
         
+        # Indexes for document chunks collection
+        await db.document_chunks.create_index([("content", "text")])
+        await db.document_chunks.create_index([("document_id", 1)])
+        await db.document_chunks.create_index([("chunk_index", 1)])
+        await db.document_chunks.create_index([("document_id", 1), ("chunk_index", 1)])
+        
+        # Index for embeddings if using vector search
+        # await db.document_chunks.create_index([("embedding", "2dsphere")])  # For vector search
+        
         logger.info("Successfully created database indexes")
         
     except Exception as e:

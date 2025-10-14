@@ -20,32 +20,41 @@ async def ask_question(
     start_time = time.time()
     
     try:
-        # Find relevant documents for the question
-        relevant_docs = await find_relevant_documents(
+        # Find relevant chunks for the question (using RAG)
+        relevant_chunks = await find_relevant_chunks(
             db, 
             qa_request.question, 
             qa_request.context_limit,
             qa_request.category
         )
         
-        if not relevant_docs:
+        if not relevant_chunks:
             execution_time = time.time() - start_time
             return QAResponse(
                 question=qa_request.question,
-                answer="Tôi không thể tìm thấy tài liệu nào liên quan đến câu hỏi của bạn.",
+                answer="Tôi không thể tìm thấy thông tin nào liên quan đến câu hỏi của bạn trong các tài liệu.",
                 confidence=0.1,
                 sources=[],
                 execution_time=execution_time
             )
         
-        # Extract text content from documents
+        # Extract context from chunks and create simplified chunk documents
         context_texts = []
         source_documents = []
         
-        for doc in relevant_docs:
-            document_model = DocumentModel.from_mongo(doc)
-            context_texts.append(doc.get("content", ""))
-            source_documents.append(document_model)
+        for chunk_data in relevant_chunks:
+            context_texts.append(chunk_data.get("content", ""))
+            
+            # Create a simplified DocumentModel representing the chunk
+            chunk_doc = DocumentModel(
+                id=str(chunk_data.get("_id", "")),
+                title=f"Chunk from: {chunk_data.get('document_title', 'Unknown Document')}",
+                content=chunk_data.get("content", "")[:500] + "..." if len(chunk_data.get("content", "")) > 500 else chunk_data.get("content", ""),
+                category=chunk_data.get("document_category", "unknown"),
+                summary=f"Relevant chunk (score: {chunk_data.get('relevance_score', 0.5):.2f})",
+                tags=[f"chunk_index_{chunk_data.get('chunk_index', 0)}"]
+            )
+            source_documents.append(chunk_doc)
         
         # Generate answer using AI service
         answer, confidence = await ai_service.generate_answer(
@@ -66,6 +75,68 @@ async def ask_question(
     except Exception as e:
         logger.error(f"Q&A failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+async def find_relevant_chunks(
+    db: AsyncIOMotorDatabase,
+    question: str,
+    limit: int,
+    category: str = None
+) -> List[dict]:
+    """Find chunks most relevant to the question using text search"""
+    try:
+        import re
+        from bson import ObjectId
+        
+        # Simple keyword-based search (in production, use vector similarity)
+        keywords = re.findall(r'\w+', question.lower())
+        query_pattern = "|".join(keywords)
+        
+        # Build aggregation pipeline to join chunks with documents
+        pipeline = [
+            # Match chunks containing keywords
+            {
+                "$match": {
+                    "content": {"$regex": query_pattern, "$options": "i"}
+                }
+            },
+            # Join with documents collection to get document metadata
+            {
+                "$lookup": {
+                    "from": "documents",
+                    "let": {"doc_id": {"$toObjectId": "$document_id"}},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$doc_id"]}}}
+                    ],
+                    "as": "document"
+                }
+            },
+            # Unwind document array
+            {"$unwind": "$document"},
+            # Add computed fields for easier access
+            {
+                "$addFields": {
+                    "document_title": "$document.title",
+                    "document_category": "$document.category",
+                    "relevance_score": 0.7  # Fixed score for now, can be enhanced with TF-IDF later
+                }
+            },
+            # Filter by category if specified
+            *([{"$match": {"document_category": category}}] if category else []),
+            # Sort by relevance score and chunk index
+            {"$sort": {"relevance_score": -1, "chunk_index": 1}},
+            # Limit results
+            {"$limit": limit}
+        ]
+        
+        cursor = db.document_chunks.aggregate(pipeline)
+        chunks = await cursor.to_list(length=limit)
+        
+        return chunks
+        
+    except Exception as e:
+        logger.error(f"Failed to find relevant chunks: {e}")
+        # Fallback to empty list
+        return []
 
 async def find_relevant_documents(
     db: AsyncIOMotorDatabase,
